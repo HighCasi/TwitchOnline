@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitch Streamer Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom Scrollbar and utility styles */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        
+        .toast-enter { transform: translateY(100%); opacity: 0; }
+        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .toast-exit { transform: translateY(0); opacity: 1; }
+        .toast-exit-active { transform: translateY(100%); opacity: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        
+        .chat-container {
+            scroll-behavior: smooth;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="bg-gray-800 border-b border-gray-700 p-4 shadow-md sticky top-0 z-40">
+        <div class="max-w-5xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <svg class="w-8 h-8 text-[#9146FF]" fill="currentColor" viewBox="0 0 24 24"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>
+                <h1 class="text-xl font-bold tracking-wide">Twitch Tracker</h1>
+            </div>
+            <div class="flex gap-2 sm:gap-3">
+                <button onclick="refreshData()" class="bg-gray-700 hover:bg-gray-600 text-white p-3 sm:px-4 sm:py-2 rounded-xl transition flex items-center justify-center gap-2 shadow text-sm md:text-base min-h-[48px] min-w-[48px]" title="Aktualisieren">
+                    <svg class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <span class="hidden sm:inline">Aktualisieren</span>
+                </button>
+                <button onclick="toggleSettings()" class="bg-[#9146FF] hover:bg-[#772ce8] text-white p-3 sm:px-4 sm:py-2 rounded-xl transition flex items-center justify-center gap-2 shadow text-sm md:text-base min-h-[48px] min-w-[48px]" title="API Setup">
+                    <svg class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span class="hidden sm:inline">Setup</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-4 flex flex-col gap-6">
+        
+        <!-- Add Streamer Section -->
+        <div class="bg-gray-800 p-4 sm:p-5 rounded-2xl border border-gray-700 shadow-lg">
+            <h2 class="text-lg font-semibold mb-3">Streamer hinzufügen</h2>
+            <form onsubmit="addStreamer(event)" class="flex flex-col sm:flex-row gap-3">
+                <input type="text" id="streamer-input" placeholder="Twitch Benutzername (z.B. gronkh)" required class="flex-1 bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#9146FF] focus:ring-1 focus:ring-[#9146FF] min-h-[48px] text-base">
+                <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-xl font-medium transition shadow min-h-[48px]">Hinzufügen</button>
+            </form>
+        </div>
+
+        <!-- Online Streamers -->
+        <div>
+            <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                <span class="relative flex h-3 w-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                </span>
+                Online
+                <span id="online-count" class="text-sm font-normal text-gray-400 ml-2">(0)</span>
+            </h2>
+            <div id="online-list" class="flex flex-col gap-4">
+                <!-- Online cards injected here -->
+                <p class="text-gray-500 text-sm italic empty-msg">Keine Streamer aus deiner Liste sind aktuell online.</p>
+            </div>
+        </div>
+
+        <!-- Offline Streamers -->
+        <div class="mt-4 opacity-75">
+            <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                <span class="w-3 h-3 bg-gray-500 rounded-full"></span>
+                Offline
+                <span id="offline-count" class="text-sm font-normal text-gray-400 ml-2">(0)</span>
+            </h2>
+            <div id="offline-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <!-- Offline cards injected here -->
+                <p class="text-gray-500 text-sm italic empty-msg col-span-full">Keine Offline-Streamer vorhanden.</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-2xl max-w-md w-full relative">
+            <h2 class="text-2xl font-bold mb-4 text-[#9146FF]">Twitch API Einstellungen</h2>
+            <p class="text-sm text-gray-400 mb-6">Für echte Live-Daten benötigt diese App eine Twitch Client ID und einen OAuth Access Token. Diese Daten werden nur lokal in deinem Browser gespeichert.</p>
+            
+            <div class="flex flex-col gap-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Client ID</label>
+                    <input type="text" id="client-id-input" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#9146FF] min-h-[48px] text-base">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">OAuth Token</label>
+                    <input type="password" id="oauth-token-input" placeholder="Ohne 'Bearer ' Präfix" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#9146FF] min-h-[48px] text-base">
+                </div>
+            </div>
+
+            <!-- Notifications Section -->
+            <div class="mt-6 border-t border-gray-700 pt-6">
+                <h3 class="text-sm font-medium text-gray-300 mb-3">Push-Benachrichtigungen</h3>
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-gray-900 border border-gray-700 p-3 rounded-xl gap-3">
+                    <span class="text-sm text-gray-400 font-medium" id="notification-status">Wird geprüft...</span>
+                    <button onclick="requestNotifications()" class="w-full sm:w-auto bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-xl text-sm transition shadow min-h-[44px]">Benachrichtigungen aktivieren</button>
+                </div>
+            </div>
+
+            <!-- Backup Section -->
+            <div class="mt-6 border-t border-gray-700 pt-6">
+                <h3 class="text-sm font-medium text-gray-300 mb-3">Streamer-Liste Backup</h3>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button onclick="exportStreamers()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-xl text-sm transition shadow flex items-center justify-center gap-2 min-h-[44px]">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        Exportieren
+                    </button>
+                    <button onclick="document.getElementById('import-file').click()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-xl text-sm transition shadow flex items-center justify-center gap-2 min-h-[44px]">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                        Importieren
+                    </button>
+                    <input type="file" id="import-file" class="hidden" accept=".json" onchange="importStreamers(event)">
+                </div>
+            </div>
+
+            <div class="mt-8 flex flex-col sm:flex-row justify-end gap-3">
+                <button onclick="toggleSettings()" class="w-full sm:w-auto px-4 py-3 rounded-xl text-gray-300 hover:bg-gray-700 bg-gray-700/50 sm:bg-transparent transition min-h-[48px] text-center">Abbrechen</button>
+                <button onclick="saveSettings()" class="w-full sm:w-auto bg-[#9146FF] hover:bg-[#772ce8] text-white px-6 py-3 rounded-xl font-medium transition shadow min-h-[48px]">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Toast / Alert -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <script>
+        // --- State Management ---
+        let credentials = { clientId: '', token: '' };
+        let streamers = [];
+        let chatSocket = null;
+        let previousStates = {};
+        let isFirstLoad = true;
+        let autoRefreshInterval = null;
+        
+        // --- Initialization ---
+        window.onload = () => {
+            loadStorage();
+            updateNotificationStatus();
+            
+            if (!credentials.clientId || !credentials.token) {
+                showToast('Bitte richte zuerst die API Einstellungen ein.', 'warning');
+                toggleSettings();
+            } else {
+                refreshData();
+                // Check every 20 minutes automatically for notifications
+                autoRefreshInterval = setInterval(refreshData, 1200000);
+            }
+        };
+
+        function loadStorage() {
+            try {
+                const storedCreds = localStorage.getItem('twitch_creds');
+                if (storedCreds) credentials = JSON.parse(storedCreds);
+                
+                const storedStreamers = localStorage.getItem('twitch_streamers');
+                if (storedStreamers) streamers = JSON.parse(storedStreamers);
+            } catch (e) {
+                console.error("Fehler beim Laden des Speichers", e);
+            }
+            
+            document.getElementById('client-id-input').value = credentials.clientId || '';
+            document.getElementById('oauth-token-input').value = credentials.token || '';
+        }
+
+        function saveStorage() {
+            try {
+                localStorage.setItem('twitch_creds', JSON.stringify(credentials));
+                localStorage.setItem('twitch_streamers', JSON.stringify(streamers));
+            } catch (e) {
+                showToast("Fehler beim Speichern. (Local Storage deaktiviert?)", "error");
+            }
+        }
+
+        // --- Settings / UI ---
+        function toggleSettings() {
+            const modal = document.getElementById('settings-modal');
+            modal.classList.toggle('hidden');
+        }
+
+        function saveSettings() {
+            const clientId = document.getElementById('client-id-input').value.trim();
+            const token = document.getElementById('oauth-token-input').value.trim();
+            
+            if (!clientId || !token) {
+                showToast('Beide Felder müssen ausgefüllt sein.', 'error');
+                return;
+            }
+
+            credentials = { clientId, token };
+            saveStorage();
+            toggleSettings();
+            showToast('Einstellungen gespeichert!', 'success');
+            refreshData();
+            
+            if(!autoRefreshInterval) {
+                autoRefreshInterval = setInterval(refreshData, 1200000);
+            }
+        }
+
+        // --- Notifications ---
+        function requestNotifications() {
+            if (!("Notification" in window)) {
+                showToast("Dein Browser (oder iOS ohne Home-Bildschirm-App) unterstützt keine Benachrichtigungen.", "error");
+                return;
+            }
+            Notification.requestPermission().then(permission => {
+                updateNotificationStatus();
+                if (permission === "granted") {
+                    showToast("Benachrichtigungen sind nun aktiv!", "success");
+                } else {
+                    showToast("Benachrichtigungen wurden abgelehnt.", "warning");
+                }
+            });
+        }
+
+        function updateNotificationStatus() {
+            const statusText = document.getElementById('notification-status');
+            if (!("Notification" in window)) {
+                statusText.textContent = "Status: Nicht unterstützt";
+                return;
+            }
+            if (Notification.permission === "granted") {
+                statusText.textContent = "Status: Aktiviert (Bereit)";
+                statusText.classList.remove("text-gray-400", "text-red-400");
+                statusText.classList.add("text-green-400");
+            } else if (Notification.permission === "denied") {
+                statusText.textContent = "Status: Blockiert";
+                statusText.classList.remove("text-gray-400", "text-green-400");
+                statusText.classList.add("text-red-400");
+            } else {
+                statusText.textContent = "Status: Nicht gefragt";
+            }
+        }
+
+        function sendNotification(title, body) {
+            if (!("Notification" in window) || Notification.permission !== "granted") return;
+            try {
+                new Notification(title, { 
+                    body: body, 
+                    icon: 'https://placehold.co/100x100/9146FF/FFF?text=Live' 
+                });
+            } catch (e) {
+                console.warn("Benachrichtigung fehlgeschlagen (Auf Mobile oft Service Worker nötig):", e);
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bgClass = 'bg-gray-800 border-gray-700';
+            if (type === 'error') bgClass = 'bg-red-900 border-red-700 text-red-100';
+            else if (type === 'success') bgClass = 'bg-green-900 border-green-700 text-green-100';
+            else if (type === 'warning') bgClass = 'bg-yellow-900 border-yellow-700 text-yellow-100';
+
+            toast.className = `${bgClass} border px-4 py-3 rounded-lg shadow-xl toast-enter flex items-center gap-3`;
+            toast.innerHTML = `<span class="text-sm font-medium">${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            requestAnimationFrame(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-enter-active');
+            });
+
+            setTimeout(() => {
+                toast.classList.remove('toast-enter-active');
+                toast.classList.add('toast-exit-active');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // --- Streamer Management ---
+        function addStreamer(e) {
+            e.preventDefault();
+            const input = document.getElementById('streamer-input');
+            const name = input.value.trim().toLowerCase();
+            
+            if (!name) return;
+            if (streamers.includes(name)) {
+                showToast('Streamer ist bereits in der Liste.', 'warning');
+                return;
+            }
+
+            streamers.push(name);
+            saveStorage();
+            input.value = '';
+            showToast(`${name} hinzugefügt.`, 'success');
+            refreshData();
+        }
+
+        function removeStreamer(name) {
+            streamers = streamers.filter(s => s !== name);
+            saveStorage();
+            showToast(`${name} entfernt.`, 'info');
+            refreshData();
+        }
+
+        // --- Export & Import ---
+        function exportStreamers() {
+            if (streamers.length === 0) {
+                showToast('Die Liste ist leer und kann nicht exportiert werden.', 'warning');
+                return;
+            }
+            const dataStr = JSON.stringify(streamers, null, 2);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'twitch_streamers_backup.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Liste erfolgreich exportiert!', 'success');
+        }
+
+        function importStreamers(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (Array.isArray(importedData)) {
+                        // Ensure all entries are strings and lowercase, remove duplicates
+                        const validNames = importedData
+                            .filter(name => typeof name === 'string')
+                            .map(name => name.trim().toLowerCase())
+                            .filter(name => name.length > 0);
+                            
+                        const mergedList = [...new Set([...streamers, ...validNames])];
+                        
+                        streamers = mergedList;
+                        saveStorage();
+                        showToast(`${validNames.length} Streamer erfolgreich importiert!`, 'success');
+                        refreshData();
+                    } else {
+                        showToast('Ungültiges Dateiformat. JSON-Array erwartet.', 'error');
+                    }
+                } catch (error) {
+                    showToast('Fehler beim Lesen der Datei.', 'error');
+                }
+                event.target.value = ''; // Reset file input
+            };
+            reader.readAsText(file);
+        }
+
+        // --- API & Fetching ---
+        async function twitchFetch(endpoint) {
+            const res = await fetch(`https://api.twitch.tv/helix/${endpoint}`, {
+                headers: {
+                    'Client-ID': credentials.clientId,
+                    'Authorization': `Bearer ${credentials.token}`
+                }
+            });
+            if (res.status === 401) {
+                throw new Error("Unauthorized (401)");
+            }
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
+            }
+            return res.json();
+        }
+
+        async function refreshData() {
+            if (!credentials.clientId || !credentials.token) {
+                showToast("Es fehlen API Zugangsdaten.", "error");
+                return;
+            }
+            if (streamers.length === 0) {
+                updateUI([], []);
+                return;
+            }
+
+            const btn = document.querySelector('button[onclick="refreshData()"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="animate-spin text-lg block w-4 h-4 rounded-full border-2 border-t-white border-gray-400"></span> Laden...';
+            btn.disabled = true;
+
+            try {
+                // 1. Get User IDs (API allows up to 100 logins per request)
+                // For simplicity, we chunk if needed, but assume < 100 for a personal tracker.
+                const loginQuery = streamers.map(s => `login=${encodeURIComponent(s)}`).join('&');
+                const usersRes = await twitchFetch(`users?${loginQuery}`);
+                const users = usersRes.data;
+
+                // 2. Get Streams (Live status)
+                const idQuery = users.map(u => `user_id=${u.id}`).join('&');
+                let streams = [];
+                if (idQuery) {
+                    const streamsRes = await twitchFetch(`streams?${idQuery}`);
+                    streams = streamsRes.data;
+                }
+
+                const onlineList = [];
+                const offlineList = [];
+
+                users.forEach(user => {
+                    const stream = streams.find(s => s.user_id === user.id);
+                    if (stream) {
+                        onlineList.push({ user, stream });
+                    } else {
+                        offlineList.push(user);
+                    }
+                });
+
+                // Missing users from API response (account deleted/banned)
+                const foundLogins = users.map(u => u.login.toLowerCase());
+                streamers.forEach(s => {
+                    if (!foundLogins.includes(s)) {
+                        offlineList.push({ login: s, display_name: s, id: null, notFound: true });
+                    }
+                });
+
+                // --- Notification & State Tracking ---
+                const currentStates = {};
+                
+                onlineList.forEach(item => {
+                    const login = item.user.login;
+                    currentStates[login] = true;
+                    
+                    // Offline -> Online transition (Skip on absolute first load)
+                    if (!isFirstLoad && previousStates[login] === false) {
+                        sendNotification(`${item.user.display_name} ist jetzt LIVE!`, item.stream.title);
+                    }
+                });
+                
+                offlineList.forEach(user => {
+                    const login = user.login;
+                    currentStates[login] = false;
+                    
+                    // Online -> Offline transition
+                    if (!isFirstLoad && previousStates[login] === true) {
+                        sendNotification(`${user.display_name} ist jetzt offline.`, "");
+                    }
+                });
+                
+                previousStates = currentStates;
+                isFirstLoad = false;
+                // ------------------------------------
+
+                updateUI(onlineList, offlineList);
+
+            } catch (error) {
+                console.error(error);
+                if (error.message.includes("401")) {
+                    showToast("Zugriff verweigert (401). Ist dein OAuth Token abgelaufen?", "error");
+                } else {
+                    showToast("Fehler beim Abrufen der Daten.", "error");
+                }
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // --- Render UI ---
+        function updateUI(online, offline) {
+            const onlineContainer = document.getElementById('online-list');
+            const offlineContainer = document.getElementById('offline-list');
+            
+            document.getElementById('online-count').textContent = `(${online.length})`;
+            document.getElementById('offline-count').textContent = `(${offline.length})`;
+
+            onlineContainer.innerHTML = '';
+            offlineContainer.innerHTML = '';
+
+            // Handle Chat WS disconnect
+            if (chatSocket) {
+                chatSocket.close();
+                chatSocket = null;
+            }
+
+            if (online.length === 0) {
+                onlineContainer.innerHTML = '<p class="text-gray-500 text-sm italic">Niemand ist aktuell online.</p>';
+            } else {
+                online.forEach(data => onlineContainer.appendChild(createOnlineCard(data)));
+                initChatWebsocket(online.map(d => d.user.login));
+                fetchClipsForOnline(online);
+            }
+
+            if (offline.length === 0) {
+                offlineContainer.innerHTML = '<p class="text-gray-500 text-sm italic col-span-full">Keine Offline-Streamer vorhanden.</p>';
+            } else {
+                offline.forEach(user => offlineContainer.appendChild(createOfflineCard(user)));
+                fetchLastOnline(offline);
+            }
+        }
+
+        function createOnlineCard({ user, stream }) {
+            const div = document.createElement('div');
+            div.className = "bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden shadow-lg transition hover:border-gray-600 flex flex-col";
+            
+            const viewerCount = new Intl.NumberFormat('de-DE').format(stream.viewer_count);
+            
+            // Calculate Uptime (Dauer, die der Stream schon online ist)
+            const startedAt = new Date(stream.started_at);
+            const now = new Date();
+            const diffMs = now - startedAt;
+            const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const uptimeText = diffHrs > 0 ? `Seit ${diffHrs}h ${diffMins}m online` : `Seit ${diffMins}m online`;
+            
+            div.innerHTML = `
+                <div class="p-4 sm:p-5 flex flex-col gap-4 border-b border-gray-700">
+                    <div class="flex gap-4 items-start">
+                        <img src="${user.profile_image_url || 'https://placehold.co/100x100/374151/FFF?text=?'}" alt="${user.display_name}" class="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-[#9146FF] shrink-0">
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-lg font-bold text-white flex items-center gap-2 flex-wrap">
+                                <span class="relative flex h-3 w-3 shrink-0">
+                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                    <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                                </span>
+                                <a href="https://twitch.tv/${user.login}" target="_blank" class="hover:text-[#9146FF] transition truncate">${user.display_name}</a>
+                                <span class="text-[#9146FF] text-xs font-bold uppercase tracking-wider ml-auto bg-gray-900 px-2 py-1 rounded-md shrink-0">${stream.game_name}</span>
+                            </h3>
+                            <p class="text-gray-300 text-sm font-medium mt-2 leading-snug break-words">${stream.title}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-wrap items-center gap-2 mt-1">
+                        <div class="bg-gray-700/50 border border-gray-600 text-gray-200 px-3 py-2 rounded-xl flex items-center gap-2 text-sm font-medium">
+                            <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            ${uptimeText}
+                        </div>
+                        <div class="bg-gray-700/50 border border-gray-600 text-gray-200 px-3 py-2 rounded-xl flex items-center gap-2 text-sm font-bold">
+                            <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>
+                            ${viewerCount}
+                        </div>
+                        <button onclick="removeStreamer('${user.login}')" class="ml-auto text-gray-400 hover:text-red-400 bg-gray-900 border border-gray-700 rounded-xl transition min-h-[44px] min-w-[44px] flex items-center justify-center shadow-sm" title="Entfernen">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Accordions -->
+                <div class="bg-gray-900/50 divide-y divide-gray-700/50">
+                    <!-- Live Stream -->
+                    <details class="group">
+                        <summary class="flex justify-between items-center font-medium cursor-pointer list-none px-4 py-3 sm:px-5 text-sm text-gray-300 hover:text-white transition min-h-[56px]">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                Live Stream
+                            </span>
+                            <span class="transition group-open:rotate-180 p-1">
+                                <svg fill="none" height="20" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6"></path></svg>
+                            </span>
+                        </summary>
+                        <div class="px-4 sm:px-5 pb-4">
+                            <div id="stream-embed-${user.login}" class="aspect-video w-full bg-gray-950 rounded-xl flex items-center justify-center border border-gray-800 shadow-inner overflow-hidden relative">
+                                <button onclick="loadStream('${user.login}')" class="bg-[#9146FF] hover:bg-[#772ce8] text-white px-6 py-3 rounded-xl font-medium transition shadow flex items-center gap-2">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                    Stream starten
+                                </button>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- Chat -->
+                    <details class="group">
+                        <summary class="flex justify-between items-center font-medium cursor-pointer list-none px-4 py-3 sm:px-5 text-sm text-gray-300 hover:text-white transition min-h-[56px]">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                                Live Chat (Letzte 20)
+                            </span>
+                            <span class="transition group-open:rotate-180 p-1">
+                                <svg fill="none" height="20" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6"></path></svg>
+                            </span>
+                        </summary>
+                        <div class="px-4 sm:px-5 pb-4 text-sm text-gray-400">
+                            <div class="bg-gray-950 rounded-xl p-3 max-h-56 overflow-y-auto chat-container border border-gray-800 shadow-inner" id="chat-${user.login}">
+                                <p class="text-gray-600 text-xs italic">Verbinde mit Chat...</p>
+                            </div>
+                        </div>
+                    </details>
+                    
+                    <!-- Clips -->
+                    <details class="group" ontoggle="if(this.open) renderClips('${user.id}', '${user.login}')">
+                        <summary class="flex justify-between items-center font-medium cursor-pointer list-none px-4 py-3 sm:px-5 text-sm text-gray-300 hover:text-white transition min-h-[56px]">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"/></svg>
+                                Aktuellste 3 Clips
+                            </span>
+                            <span class="transition group-open:rotate-180 p-1">
+                                <svg fill="none" height="20" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6"></path></svg>
+                            </span>
+                        </summary>
+                        <div class="px-4 sm:px-5 pb-4 text-sm text-gray-400">
+                            <div id="clips-${user.login}" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div class="animate-pulse bg-gray-800 h-28 rounded-xl"></div>
+                                <div class="animate-pulse bg-gray-800 h-28 rounded-xl hidden sm:block"></div>
+                                <div class="animate-pulse bg-gray-800 h-28 rounded-xl hidden sm:block"></div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            `;
+            return div;
+        }
+
+        function createOfflineCard(user) {
+            const div = document.createElement('div');
+            div.className = "bg-gray-800 border border-gray-700 rounded-2xl p-4 flex flex-col shadow gap-3 relative group";
+            
+            const profileImg = user.profile_image_url || 'https://placehold.co/100x100/1f2937/6b7280?text=?';
+            
+            div.innerHTML = `
+                <button onclick="removeStreamer('${user.login}')" class="absolute top-2 right-2 text-gray-500 hover:text-red-400 bg-gray-900 border border-gray-700 rounded-xl transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </button>
+                <div class="flex items-center gap-4">
+                    <img src="${profileImg}" alt="${user.display_name}" class="w-12 h-12 rounded-full grayscale opacity-70 border-2 border-gray-600">
+                    <div class="pr-10">
+                        <a href="https://twitch.tv/${user.login}" target="_blank" class="font-bold text-gray-300 hover:text-white transition text-lg block truncate">${user.display_name}</a>
+                        ${user.notFound ? '<span class="block text-red-400 text-xs mt-1 bg-red-900/30 px-2 py-0.5 rounded inline-block">Account nicht gefunden</span>' : ''}
+                    </div>
+                </div>
+                ${!user.notFound ? `
+                <div class="bg-gray-900 rounded-xl p-3 text-sm text-gray-400 flex items-center gap-2 mt-1">
+                    <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div class="flex flex-col">
+                        <span class="text-xs text-gray-500 leading-none mb-1">Zuletzt online</span>
+                        <span id="last-online-${user.id}" class="font-medium text-gray-300 leading-none">Wird ermittelt...</span>
+                    </div>
+                </div>` : ''}
+            `;
+            return div;
+        }
+
+        // --- Chat WebSocket ---
+        function initChatWebsocket(channels) {
+            if (channels.length === 0) return;
+
+            chatSocket = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
+            
+            chatSocket.onopen = () => {
+                // Anonymous connection
+                chatSocket.send('NICK justinfan12345');
+                channels.forEach(ch => {
+                    chatSocket.send(`JOIN #${ch.toLowerCase()}`);
+                    const container = document.getElementById(`chat-${ch}`);
+                    if(container) container.innerHTML = ''; // Clear placeholder
+                });
+            };
+
+            chatSocket.onmessage = (event) => {
+                const messages = event.data.split('\r\n');
+                
+                messages.forEach(msg => {
+                    if (!msg) return;
+
+                    // Ping Pong
+                    if (msg.startsWith('PING')) {
+                        chatSocket.send('PONG :tmi.twitch.tv');
+                        return;
+                    }
+
+                    // Parse PRIVMSG
+                    // Format: :username!username@username.tmi.twitch.tv PRIVMSG #channel :Message text here
+                    const privmsgRegex = /^:([^!]+)!.* PRIVMSG #([^ ]+) :(.+)$/;
+                    const match = msg.match(privmsgRegex);
+
+                    if (match) {
+                        const [, user, channel, text] = match;
+                        appendChatMessage(channel, user, text);
+                    }
+                });
+            };
+            
+            chatSocket.onerror = (err) => console.error('Chat WS Error', err);
+        }
+
+        function appendChatMessage(channel, user, text) {
+            const container = document.getElementById(`chat-${channel}`);
+            if (!container) return;
+
+            const isCommand = text.startsWith('!');
+
+            const line = document.createElement('div');
+            line.className = "mb-1.5 text-sm leading-snug break-words";
+            line.innerHTML = `<span class="font-bold text-[#b784ff]">${escapeHTML(user)}:</span> <span class="text-gray-300 ${isCommand ? 'opacity-70' : ''}">${escapeHTML(text)}</span>`;
+            
+            container.appendChild(line);
+
+            // Keep only last 20
+            while (container.children.length > 20) {
+                container.removeChild(container.firstChild);
+            }
+            
+            // Auto scroll
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // --- Stream Embed ---
+        function loadStream(login) {
+            const container = document.getElementById(`stream-embed-${login}`);
+            if (!container) return;
+            
+            // Twitch benötigt den Hostnamen für die Einbettung (oder localhost für lokale Tests)
+            const parentDomain = window.location.hostname || 'localhost';
+            
+            container.innerHTML = `
+                <iframe 
+                    src="https://player.twitch.tv/?channel=${login}&parent=${parentDomain}&autoplay=true" 
+                    class="w-full h-full rounded-xl border-none" 
+                    allowfullscreen>
+                </iframe>
+            `;
+        }
+
+        // --- Clips & VODs ---
+        let clipsCache = {}; // Cache to avoid refetching while navigating
+
+        async function fetchClipsForOnline(onlineList) {
+            // We preload clips so they are ready when dropdown opens
+            const lastWeek = new Date();
+            lastWeek.setDate(lastWeek.getDate() - 7);
+            const startedAt = lastWeek.toISOString();
+
+            for (const item of onlineList) {
+                try {
+                    // Hole bis zu 20 Clips, um eine gute Basis für die neuesten Clips zu haben
+                    const res = await twitchFetch(`clips?broadcaster_id=${item.user.id}&first=20&started_at=${startedAt}`);
+                    
+                    // Sortiere explizit nach Erstellungsdatum absteigend (neueste zuerst)
+                    const sortedClips = res.data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                    
+                    clipsCache[item.user.id] = sortedClips.slice(0, 3); // Behalte nur die absolut neuesten 3
+                    
+                    // If accordion is already open (unlikely on first load, but possible on refresh), render
+                    renderClips(item.user.id, item.user.login);
+                } catch (e) {
+                    console.error("Clips fetch error for " + item.user.login, e);
+                }
+            }
+        }
+
+        function renderClips(userId, login) {
+            const container = document.getElementById(`clips-${login}`);
+            if (!container) return;
+
+            const clips = clipsCache[userId];
+            
+            if (!clips) {
+                // Not loaded yet or failed
+                return;
+            }
+
+            if (clips.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-xs col-span-full">Keine aktuellen Clips gefunden.</p>';
+                return;
+            }
+
+            container.innerHTML = clips.map(clip => `
+                <a href="${clip.url}" target="_blank" class="block relative group overflow-hidden rounded-lg border border-gray-700 hover:border-[#9146FF] transition bg-gray-900">
+                    <img src="${clip.thumbnail_url}" alt="${escapeHTML(clip.title)}" class="w-full h-auto aspect-video object-cover opacity-80 group-hover:opacity-100 transition">
+                    <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-6">
+                        <p class="text-xs font-medium text-white truncate" title="${escapeHTML(clip.title)}">${escapeHTML(clip.title)}</p>
+                        <p class="text-[10px] text-gray-400">${new Intl.NumberFormat('de-DE').format(clip.view_count)} Aufrufe</p>
+                    </div>
+                    <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/50 rounded-full p-2 opacity-0 group-hover:opacity-100 transition">
+                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    </div>
+                </a>
+            `).join('');
+        }
+
+        async function fetchLastOnline(offlineList) {
+            for (const user of offlineList) {
+                if (!user.id) continue; // Not found user
+                const label = document.getElementById(`last-online-${user.id}`);
+                if (!label) continue;
+
+                try {
+                    // Fetch latest archive/VOD
+                    const res = await twitchFetch(`videos?user_id=${user.id}&type=archive&first=1`);
+                    const videos = res.data;
+                    
+                    if (videos.length > 0) {
+                        const date = new Date(videos[0].created_at);
+                        label.textContent = new Intl.DateTimeFormat('de-DE', {
+                            day: '2-digit', month: '2-digit', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit'
+                        }).format(date) + ' Uhr';
+                        label.classList.add('text-gray-300');
+                    } else {
+                        label.textContent = "Unbekannt (Keine VODs)";
+                        label.classList.add('text-gray-500');
+                    }
+                } catch (e) {
+                    label.textContent = "Fehler beim Laden";
+                }
+            }
+        }
+
+        // --- Utils ---
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.replace(/[&<>'"]/g, 
+                tag => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    "'": '&#39;',
+                    '"': '&quot;'
+                }[tag] || tag)
+            );
+        }
+
+    </script>
+</body>
+</html>
