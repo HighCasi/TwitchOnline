@@ -811,17 +811,22 @@
                 return;
             }
 
+            const currentHost = window.location.hostname || 'localhost';
+
             container.innerHTML = clips.map(clip => `
-                <a href="${clip.url}" target="_blank" class="block relative group overflow-hidden rounded-lg border border-gray-700 hover:border-[#9146FF] transition bg-gray-900">
-                    <img src="${clip.thumbnail_url}" alt="${escapeHTML(clip.title)}" class="w-full h-auto aspect-video object-cover opacity-80 group-hover:opacity-100 transition">
-                    <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-6">
-                        <p class="text-xs font-medium text-white truncate" title="${escapeHTML(clip.title)}">${escapeHTML(clip.title)}</p>
-                        <p class="text-[10px] text-gray-400">${new Intl.NumberFormat('de-DE').format(clip.view_count)} Aufrufe</p>
+                <div class="flex flex-col gap-1.5 bg-gray-900 p-2 rounded-xl border border-gray-700 hover:border-gray-600 transition">
+                    <div class="flex justify-between items-center px-1">
+                        <p class="text-xs font-medium text-white truncate pr-2" title="${escapeHTML(clip.title)}">${escapeHTML(clip.title)}</p>
+                        <p class="text-[10px] text-gray-400 shrink-0">${new Intl.NumberFormat('de-DE').format(clip.view_count)} Aufrufe</p>
                     </div>
-                    <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/50 rounded-full p-2 opacity-0 group-hover:opacity-100 transition">
-                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <div class="aspect-video w-full rounded-lg overflow-hidden bg-black relative border border-gray-800 shadow-inner">
+                        <iframe 
+                            src="${clip.embed_url}&parent=${currentHost}&autoplay=false" 
+                            class="w-full h-full border-none absolute inset-0"
+                            allowfullscreen="true">
+                        </iframe>
                     </div>
-                </a>
+                </div>
             `).join('');
         }
 
