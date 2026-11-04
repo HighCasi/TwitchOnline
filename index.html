@@ -111,6 +111,15 @@
                 </div>
             </div>
 
+            <!-- Appearance Section (Kompakt-Modus) -->
+            <div class="mt-6 border-t border-gray-700 pt-6">
+                <h3 class="text-sm font-medium text-gray-300 mb-3">Ansicht</h3>
+                <label class="flex items-center gap-3 cursor-pointer group">
+                    <input type="checkbox" id="compact-mode-toggle" class="w-5 h-5 accent-[#9146FF] bg-gray-900 border-gray-600 rounded cursor-pointer">
+                    <span class="text-sm text-gray-300 group-hover:text-white transition">Kompakt-Modus (Kleine Listenansicht)</span>
+                </label>
+            </div>
+
             <!-- Notifications Section -->
             <div class="mt-6 border-t border-gray-700 pt-6">
                 <h3 class="text-sm font-medium text-gray-300 mb-3">Push-Benachrichtigungen</h3>
@@ -150,6 +159,7 @@
         // --- State Management ---
         let credentials = { clientId: '', token: '' };
         let streamers = [];
+        let appSettings = { compactMode: false };
         let chatSocket = null;
         let previousStates = {};
         let isFirstLoad = true;
@@ -179,18 +189,25 @@
                 
                 const storedStreamers = localStorage.getItem('twitch_streamers');
                 if (storedStreamers) streamers = JSON.parse(storedStreamers);
+                
+                const storedSettings = localStorage.getItem('twitch_settings');
+                if (storedSettings) appSettings = JSON.parse(storedSettings);
             } catch (e) {
                 console.error("Fehler beim Laden des Speichers", e);
             }
             
             document.getElementById('client-id-input').value = credentials.clientId || '';
             document.getElementById('oauth-token-input').value = credentials.token || '';
+            
+            const compactToggle = document.getElementById('compact-mode-toggle');
+            if(compactToggle) compactToggle.checked = appSettings.compactMode || false;
         }
 
         function saveStorage() {
             try {
                 localStorage.setItem('twitch_creds', JSON.stringify(credentials));
                 localStorage.setItem('twitch_streamers', JSON.stringify(streamers));
+                localStorage.setItem('twitch_settings', JSON.stringify(appSettings));
             } catch (e) {
                 showToast("Fehler beim Speichern. (Local Storage deaktiviert?)", "error");
             }
@@ -212,6 +229,10 @@
             }
 
             credentials = { clientId, token };
+            
+            const compactToggle = document.getElementById('compact-mode-toggle');
+            if(compactToggle) appSettings.compactMode = compactToggle.checked;
+            
             saveStorage();
             toggleSettings();
             showToast('Einstellungen gespeichert!', 'success');
@@ -489,6 +510,14 @@
             const onlineContainer = document.getElementById('online-list');
             const offlineContainer = document.getElementById('offline-list');
             
+            if (appSettings.compactMode) {
+                onlineContainer.className = "flex flex-col gap-2";
+                offlineContainer.className = "flex flex-col gap-2";
+            } else {
+                onlineContainer.className = "flex flex-col gap-4";
+                offlineContainer.className = "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4";
+            }
+            
             document.getElementById('online-count').textContent = `(${online.length})`;
             document.getElementById('offline-count').textContent = `(${offline.length})`;
 
@@ -533,7 +562,30 @@
             const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
             const uptimeText = diffHrs > 0 ? `Seit ${diffHrs}h ${diffMins}m online` : `Seit ${diffMins}m online`;
             
-            div.innerHTML = `
+            const isCompact = appSettings.compactMode;
+
+            const headerHTML = isCompact ? `
+                <div class="p-3 sm:p-4 flex items-center gap-3 border-b border-gray-700">
+                    <img src="${user.profile_image_url || 'https://placehold.co/100x100/374151/FFF?text=?'}" alt="${user.display_name}" class="w-10 h-10 rounded-full border border-[#9146FF] shrink-0">
+                    <div class="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <span class="relative flex h-2.5 w-2.5 shrink-0">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                            </span>
+                            <a href="https://twitch.tv/${user.login}" target="_blank" class="font-bold text-white hover:text-[#9146FF] transition truncate text-sm sm:text-base">${user.display_name}</a>
+                            <span class="text-[#9146FF] text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-gray-900 px-2 py-0.5 rounded shrink-0 truncate max-w-[100px] sm:max-w-none">${stream.game_name}</span>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs font-medium shrink-0">
+                            <span class="text-gray-400 hidden sm:inline" title="${uptimeText}">${uptimeText.replace('Seit ', '').replace(' online', '')}</span>
+                            <span class="text-red-400 flex items-center gap-1"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg> ${viewerCount}</span>
+                        </div>
+                    </div>
+                    <button onclick="removeStreamer('${user.login}')" class="text-gray-500 hover:text-red-400 p-1 sm:p-2 ml-1 transition" title="Entfernen">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
+                </div>
+            ` : `
                 <div class="p-4 sm:p-5 flex flex-col gap-4 border-b border-gray-700">
                     <div class="flex gap-4 items-start">
                         <img src="${user.profile_image_url || 'https://placehold.co/100x100/374151/FFF?text=?'}" alt="${user.display_name}" class="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-[#9146FF] shrink-0">
@@ -564,7 +616,9 @@
                         </button>
                     </div>
                 </div>
-                
+            `;
+            
+            div.innerHTML = headerHTML + `
                 <!-- Accordions -->
                 <div class="bg-gray-900/50 divide-y divide-gray-700/50">
                     <!-- Live Stream -->
@@ -632,11 +686,30 @@
 
         function createOfflineCard(user) {
             const div = document.createElement('div');
-            div.className = "bg-gray-800 border border-gray-700 rounded-2xl p-4 flex flex-col shadow gap-3 relative group";
+            const isCompact = appSettings.compactMode;
+            div.className = isCompact ? 
+                "bg-gray-800 border border-gray-700 rounded-2xl flex flex-col shadow relative group" : 
+                "bg-gray-800 border border-gray-700 rounded-2xl p-4 flex flex-col shadow gap-3 relative group";
             
             const profileImg = user.profile_image_url || 'https://placehold.co/100x100/1f2937/6b7280?text=?';
             
-            div.innerHTML = `
+            const headerHTML = isCompact ? `
+                <div class="p-3 sm:p-4 flex items-center gap-3">
+                    <img src="${profileImg}" alt="${user.display_name}" class="w-10 h-10 rounded-full grayscale opacity-70 border border-gray-600 shrink-0">
+                    <div class="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 pr-6">
+                        <a href="https://twitch.tv/${user.login}" target="_blank" class="font-bold text-gray-300 hover:text-white transition text-sm sm:text-base block truncate">${user.display_name}</a>
+                        ${!user.notFound ? `
+                            <div class="flex items-center gap-3 text-[10px] sm:text-xs">
+                                <span class="text-gray-500 flex items-center gap-1 shrink-0"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path><span id="last-online-${user.id}">Wird ermittelt...</span></span>
+                                <span class="text-gray-500 flex items-center gap-1 truncate"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path><span id="schedule-${user.id}">Wird ermittelt...</span></span>
+                            </div>
+                        ` : '<span class="text-red-400 text-[10px] sm:text-xs bg-red-900/30 px-1.5 py-0.5 rounded">Account nicht gefunden</span>'}
+                    </div>
+                    <button onclick="removeStreamer('${user.login}')" class="absolute top-1/2 -translate-y-1/2 right-2 text-gray-500 hover:text-red-400 p-2 sm:opacity-0 sm:group-hover:opacity-100 transition" title="Entfernen">
+                        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
+                </div>
+            ` : `
                 <button onclick="removeStreamer('${user.login}')" class="absolute top-2 right-2 text-gray-500 hover:text-red-400 bg-gray-900 border border-gray-700 rounded-xl transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                 </button>
@@ -663,9 +736,12 @@
                         <span id="schedule-${user.id}" class="font-medium text-gray-300 leading-none truncate">Wird ermittelt...</span>
                     </div>
                 </div>
+                ` : ''}
+            `;
 
+            const clipsAccordionHTML = (!user.notFound) ? `
                 <!-- Clips Offline -->
-                <div class="bg-gray-900/50 border border-gray-700/50 rounded-xl mt-1 overflow-hidden">
+                <div class="${isCompact ? 'bg-gray-900/50 border-t border-gray-700/50 rounded-b-2xl overflow-hidden' : 'bg-gray-900/50 border border-gray-700/50 rounded-xl mt-1 overflow-hidden'}">
                     <details class="group" ontoggle="if(this.open) renderClips('${user.id}', '${user.login}')">
                         <summary class="flex justify-between items-center font-medium cursor-pointer list-none px-3 py-2 text-sm text-gray-300 hover:text-white transition min-h-[44px]">
                             <span class="flex items-center gap-2">
@@ -677,13 +753,15 @@
                             </span>
                         </summary>
                         <div class="px-3 pb-3 text-sm text-gray-400">
-                            <div id="clips-${user.login}" class="grid grid-cols-1 gap-2">
+                            <div id="clips-${user.login}" class="${isCompact ? 'grid grid-cols-1 sm:grid-cols-3 gap-2' : 'grid grid-cols-1 gap-2'}">
                                 <div class="animate-pulse bg-gray-800 h-24 rounded-xl"></div>
                             </div>
                         </div>
                     </details>
-                </div>` : ''}
-            `;
+                </div>
+            ` : '';
+
+            div.innerHTML = headerHTML + clipsAccordionHTML;
             return div;
         }
 
