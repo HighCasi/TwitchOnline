@@ -35,6 +35,10 @@
                 <h1 class="text-xl font-bold tracking-wide">Twitch Tracker</h1>
             </div>
             <div class="flex gap-2 sm:gap-3">
+                <button id="install-btn" onclick="installApp()" class="hidden bg-green-600 hover:bg-green-500 text-white p-3 sm:px-4 sm:py-2 rounded-xl transition items-center justify-center gap-2 shadow text-sm md:text-base min-h-[48px] min-w-[48px]" title="App installieren">
+                    <svg class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    <span class="hidden sm:inline">Installieren</span>
+                </button>
                 <button onclick="refreshData()" class="bg-gray-700 hover:bg-gray-600 text-white p-3 sm:px-4 sm:py-2 rounded-xl transition flex items-center justify-center gap-2 shadow text-sm md:text-base min-h-[48px] min-w-[48px]" title="Aktualisieren">
                     <svg class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                     <span class="hidden sm:inline">Aktualisieren</span>
@@ -150,9 +154,11 @@
         let previousStates = {};
         let isFirstLoad = true;
         let autoRefreshInterval = null;
+        let deferredPrompt = null;
         
         // --- Initialization ---
         window.onload = () => {
+            initPWA();
             loadStorage();
             updateNotificationStatus();
             
@@ -456,6 +462,9 @@
                     }
                 });
                 
+                // --- Sortierung der Online-Streamer nach Zuschauern (Höchste zuerst) ---
+                onlineList.sort((a, b) => b.stream.viewer_count - a.stream.viewer_count);
+
                 previousStates = currentStates;
                 isFirstLoad = false;
                 // ------------------------------------
@@ -505,6 +514,7 @@
             } else {
                 offline.forEach(user => offlineContainer.appendChild(createOfflineCard(user)));
                 fetchLastOnline(offline);
+                fetchSchedule(offline);
                 fetchClipsForOffline(offline);
             }
         }
@@ -646,6 +656,14 @@
                     </div>
                 </div>
                 
+                <div class="bg-gray-900 rounded-xl p-3 text-sm text-gray-400 flex items-center gap-2 mt-1">
+                    <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <div class="flex flex-col min-w-0">
+                        <span class="text-xs text-gray-500 leading-none mb-1">Nächster geplanter Stream</span>
+                        <span id="schedule-${user.id}" class="font-medium text-gray-300 leading-none truncate">Wird ermittelt...</span>
+                    </div>
+                </div>
+
                 <!-- Clips Offline -->
                 <div class="bg-gray-900/50 border border-gray-700/50 rounded-xl mt-1 overflow-hidden">
                     <details class="group" ontoggle="if(this.open) renderClips('${user.id}', '${user.login}')">
@@ -855,6 +873,101 @@
                 } catch (e) {
                     label.textContent = "Fehler beim Laden";
                 }
+            }
+        }
+
+        async function fetchSchedule(offlineList) {
+            for (const user of offlineList) {
+                if (!user.id) continue;
+                const label = document.getElementById(`schedule-${user.id}`);
+                if (!label) continue;
+
+                try {
+                    const res = await twitchFetch(`schedule?broadcaster_id=${user.id}`);
+                    const segments = res.data?.segments;
+                    
+                    if (segments && segments.length > 0) {
+                        const nextStream = segments[0];
+                        const date = new Date(nextStream.start_time);
+                        
+                        const formattedDate = new Intl.DateTimeFormat('de-DE', {
+                            weekday: 'short', day: '2-digit', month: '2-digit',
+                            hour: '2-digit', minute: '2-digit'
+                        }).format(date) + ' Uhr';
+                        
+                        let titleInfo = nextStream.title ? ` - ${nextStream.title}` : '';
+                        label.textContent = formattedDate + titleInfo;
+                        label.title = nextStream.title || 'Kein Titel';
+                        
+                        // Farbliches Highlight wenn ein Sendeplan vorhanden ist
+                        label.classList.add('text-[#b784ff]');
+                        label.classList.remove('text-gray-300', 'text-gray-500');
+                    } else {
+                        label.textContent = "Kein Sendeplan hinterlegt";
+                        label.classList.add('text-gray-500');
+                        label.classList.remove('text-gray-300');
+                    }
+                } catch (e) {
+                    // API antwortet oft mit Fehler (404), wenn ein Streamer gar keinen Kalender benutzt
+                    label.textContent = "Kein Sendeplan hinterlegt";
+                    label.classList.add('text-gray-500');
+                    label.classList.remove('text-gray-300');
+                }
+            }
+        }
+
+        // --- PWA (Progressive Web App) Setup ---
+        function initPWA() {
+            // 1. Dynamisches Generieren eines Web App Manifests
+            const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#9146FF"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>`;
+            const manifest = {
+                name: "Twitch Tracker",
+                short_name: "Tracker",
+                display: "standalone",
+                start_url: ".",
+                theme_color: "#1f2937",
+                background_color: "#111827",
+                icons: [{
+                    src: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(iconSvg),
+                    sizes: "512x512",
+                    type: "image/svg+xml"
+                }]
+            };
+            const manifestString = JSON.stringify(manifest);
+            document.head.insertAdjacentHTML('beforeend', '<link rel="manifest" href="data:application/manifest+json,' + encodeURIComponent(manifestString) + '">');
+
+            // 2. Dummy Service Worker registrieren (zwingend für das Install-Prompt in Chrome)
+            const swCode = "self.addEventListener('fetch', (e) => {});";
+            const blob = new Blob([swCode], {type: 'application/javascript'});
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register(URL.createObjectURL(blob))
+                    .catch(err => console.log('SW registrierung fehlgeschlagen:', err));
+            }
+
+            // 3. Auf das "Installieren"-Event des Browsers warten
+            window.addEventListener('beforeinstallprompt', (e) => {
+                // Verhindert das automatische Chrome-Banner
+                e.preventDefault(); 
+                deferredPrompt = e;
+                // Zeigt unseren eigenen grünen Install-Button in der Leiste oben an
+                const btn = document.getElementById('install-btn');
+                btn.classList.remove('hidden');
+                btn.classList.add('flex');
+            });
+        }
+
+        function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt(); // Zeigt die System-Abfrage an
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        showToast('App wird installiert...', 'success');
+                    }
+                    deferredPrompt = null;
+                    const btn = document.getElementById('install-btn');
+                    btn.classList.add('hidden');
+                    btn.classList.remove('flex');
+                });
             }
         }
 
