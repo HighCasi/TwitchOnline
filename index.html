@@ -505,6 +505,7 @@
             } else {
                 offline.forEach(user => offlineContainer.appendChild(createOfflineCard(user)));
                 fetchLastOnline(offline);
+                fetchClipsForOffline(offline);
             }
         }
 
@@ -643,6 +644,26 @@
                         <span class="text-xs text-gray-500 leading-none mb-1">Zuletzt online</span>
                         <span id="last-online-${user.id}" class="font-medium text-gray-300 leading-none">Wird ermittelt...</span>
                     </div>
+                </div>
+                
+                <!-- Clips Offline -->
+                <div class="bg-gray-900/50 border border-gray-700/50 rounded-xl mt-1 overflow-hidden">
+                    <details class="group" ontoggle="if(this.open) renderClips('${user.id}', '${user.login}')">
+                        <summary class="flex justify-between items-center font-medium cursor-pointer list-none px-3 py-2 text-sm text-gray-300 hover:text-white transition min-h-[44px]">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"/></svg>
+                                Aktuellste 3 Clips
+                            </span>
+                            <span class="transition group-open:rotate-180 p-1">
+                                <svg fill="none" height="16" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="16"><path d="M6 9l6 6 6-6"></path></svg>
+                            </span>
+                        </summary>
+                        <div class="px-3 pb-3 text-sm text-gray-400">
+                            <div id="clips-${user.login}" class="grid grid-cols-1 gap-2">
+                                <div class="animate-pulse bg-gray-800 h-24 rounded-xl"></div>
+                            </div>
+                        </div>
+                    </details>
                 </div>` : ''}
             `;
             return div;
@@ -752,6 +773,24 @@
                     renderClips(item.user.id, item.user.login);
                 } catch (e) {
                     console.error("Clips fetch error for " + item.user.login, e);
+                }
+            }
+        }
+
+        async function fetchClipsForOffline(offlineList) {
+            const lastWeek = new Date();
+            lastWeek.setDate(lastWeek.getDate() - 7);
+            const startedAt = lastWeek.toISOString();
+
+            for (const user of offlineList) {
+                if (!user.id) continue;
+                try {
+                    const res = await twitchFetch(`clips?broadcaster_id=${user.id}&first=20&started_at=${startedAt}`);
+                    const sortedClips = res.data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                    clipsCache[user.id] = sortedClips.slice(0, 3);
+                    renderClips(user.id, user.login);
+                } catch (e) {
+                    console.error("Clips fetch error for " + user.login, e);
                 }
             }
         }
